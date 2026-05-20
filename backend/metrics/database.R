@@ -45,6 +45,18 @@ logger <- Logger$new()
 db <- Connection$new(DB_PATH)
 metric <- Metric$new()
 
+# Ensure metric_results table exists (not created by setup.R in Docker)
+conn <- pool::poolCheckout(db$pool)
+DBI::dbExecute(conn, "
+  CREATE TABLE IF NOT EXISTS metric_results (
+    metric_name TEXT    NOT NULL,
+    period      INTEGER NOT NULL,
+    count       REAL    NOT NULL
+  )
+")
+DBI::dbExecute(conn, "CREATE INDEX IF NOT EXISTS idx_metric_results_name ON metric_results(metric_name)")
+pool::poolReturn(conn)
+
 for (param in PARAMS) {
   ok <- try({
     db$consult(param$query)

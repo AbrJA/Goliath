@@ -155,15 +155,27 @@ The generator creates realistic sensor patterns with:
 
 ## Docker Deployment
 
-```bash
-# Build
-docker build -f backend/Dockerfile -t process-monitor-backend .
-docker build -f dashboard/Dockerfile -t process-monitor-dashboard .
+The backend container **self-initializes on first start** — it seeds 30 days of sensor data and trains all models automatically when the data volume is empty. No manual setup required.
 
-# Run
-docker run -d -v $(pwd)/data:/app/data process-monitor-backend
-docker run -d -p 8000:8000 -v $(pwd)/data:/app/data process-monitor-dashboard
+```bash
+# Build (from project root)
+sudo docker build -f backend/Dockerfile  -t process-monitor-backend  .
+sudo docker build -f dashboard/Dockerfile -t process-monitor-dashboard .
+
+# Run (replace America/Mexico_City with your timezone)
+sudo docker run -d -e TZ=America/Mexico_City \
+  -v $(pwd)/data:/app/data \
+  --name backend process-monitor-backend
+
+sudo docker run -d -e TZ=America/Mexico_City \
+  -p 8000:8000 \
+  -v $(pwd)/data:/app/data \
+  --name dashboard process-monitor-dashboard
 ```
+
+> The `-v $(pwd)/data:/app/data` volume is shared between both containers.
+> The backend writes to `metrics.db`; the dashboard reads from it.
+> On the **first run**, the backend will take ~1–2 minutes to seed and train before the dashboard shows data.
 
 ---
 

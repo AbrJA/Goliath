@@ -136,6 +136,18 @@ function(input, output, session) {
     actual <- db$dt
 
     if (nrow(pred) > 0L && nrow(actual) > 0L) {
+      # Interpolate stored 10-min model predictions to the chosen resolution
+      n_out <- 1440L / by
+      if (nrow(pred) != n_out) {
+        x_src <- seq_len(nrow(pred))
+        x_dst <- seq(1, nrow(pred), length.out = n_out)
+        pred <- data.table::data.table(
+          lower = stats::approx(x_src, pred$lower, xout = x_dst)$y,
+          mean  = stats::approx(x_src, pred$mean,  xout = x_dst)$y,
+          upper = stats::approx(x_src, pred$upper, xout = x_dst)$y
+        )
+      }
+
       param <- Parameter$new(name = name, by = by, horizont = 1440L)
       actual_agg <- data.table::data.table(period = param$sequence[seq_len(nrow(actual))],
                                            count = actual$count)
@@ -398,29 +410,78 @@ function(input, output, session) {
 
     numeric_cols <- names(data)[sapply(data, is.numeric)]
     if (length(numeric_cols) == 0L) {
-      return(plot_ly() %>% layout(title = "No numeric columns to plot",
-                                  paper_bgcolor = "transparent", plot_bgcolor = "transparent"))
+      return(plot_ly() %>% layout(
+        title = list(text = "No numeric columns — table view only", font = list(color = "#8899aa")),
+        paper_bgcolor = "transparent", plot_bgcolor = "transparent"))
     }
 
-    x_col <- names(data)[1]
-    p <- plot_ly()
     colors <- c("#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c")
-    for (j in seq_along(numeric_cols)) {
-      p <- p %>% add_trace(y = data[[numeric_cols[j]]],
-                           type = "box", name = numeric_cols[j],
-                           marker = list(color = colors[((j - 1L) %% 6L) + 1L]),
-                           line = list(color = colors[((j - 1L) %% 6L) + 1L]),
-                           boxpoints = "outliers")
+
+    # Detect best chart type from data shape
+    time_col  <- intersect(c("minute", "hour", "period", "day"), names(data))[1]
+    group_col <- intersect(c("metric_name", "name", "group"), names(data))[1]
+    p <- plot_ly()
+
+    if (!is.na(time_col)) {
+      # Time-series data → line chart
+      if (!is.na(group_col)) {
+        groups <- unique(data[[group_col]])
+        for (j in seq_along(groups)) {
+          gd <- data[data[[group_col]] == groups[j], ]
+          p <- p %>% add_trace(x = gd[[time_col]], y = gd[[numeric_cols[1L]]],
+                               type = "scatter", mode = "lines", name = groups[j],
+                               line = list(color = colors[((j - 1L) %% 6L) + 1L]))
+        }
+      } else {
+        for (j in seq_along(numeric_cols)) {
+          p <- p %>% add_trace(x = data[[time_col]], y = data[[numeric_cols[j]]],
+                               type = "scatter", mode = "lines", name = numeric_cols[j],
+                               line = list(color = colors[((j - 1L) %% 6L) + 1L]))
+        }
+      }
+      p %>% layout(
+        xaxis = list(title = time_col, color = "#8899aa", gridcolor = "rgba(255,255,255,0.05)"),
+        yaxis = list(title = "Value",  color = "#8899aa", gridcolor = "rgba(255,255,255,0.05)"),
+        paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+        font = list(color = "#8899aa"), legend = list(font = list(color = "#ccc")))
+    } else if (!is.na(group_col) && nrow(data) <= 30L) {
+      # Aggregate stats per category → grouped bar chart
+      for (j in seq_along(numeric_cols)) {
+        p <- p %>% add_trace(x = data[[group_col]], y = data[[numeric_cols[j]]],
+                             type = "bar", name = numeric_cols[j],
+                             marker = list(color = colors[((j - 1L) %% 6L) + 1L]))
+      }
+      p %>% layout(
+        barmode = "group",
+        xaxis = list(title = group_col, color = "#8899aa", gridcolor = "rgba(255,255,255,0.05)"),
+        yaxis = list(title = "Value",   color = "#8899aa", gridcolor = "rgba(255,255,255,0.05)"),
+        paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+        font = list(color = "#8899aa"), legend = list(font = list(color = "#ccc")))
+    } else {
+      # Raw / many rows → box plot grouped by metric category when available
+      if (!is.na(group_col)) {
+        groups <- unique(data[[group_col]])
+        for (j in seq_along(groups)) {
+          gd <- data[data[[group_col]] == groups[j], ]
+          p <- p %>% add_trace(y = gd[[numeric_cols[1L]]], type = "box",
+                               name = groups[j], boxpoints = "outliers",
+                               marker = list(color = colors[((j - 1L) %% 6L) + 1L]),
+                               line  = list(color = colors[((j - 1L) %% 6L) + 1L]))
+        }
+      } else {
+        for (j in seq_along(numeric_cols)) {
+          p <- p %>% add_trace(y = data[[numeric_cols[j]]], type = "box",
+                               name = numeric_cols[j], boxpoints = "outliers",
+                               marker = list(color = colors[((j - 1L) %% 6L) + 1L]),
+                               line  = list(color = colors[((j - 1L) %% 6L) + 1L]))
+        }
+      }
+      p %>% layout(
+        xaxis = list(color = "#8899aa"),
+        yaxis = list(title = "Value", color = "#8899aa", gridcolor = "rgba(255,255,255,0.05)"),
+        paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+        font = list(color = "#8899aa"), legend = list(font = list(color = "#ccc")))
     }
-    p %>% layout(
-      xaxis = list(title = "", color = "#8899aa"),
-      yaxis = list(title = "Value", color = "#8899aa"),
-      paper_bgcolor = "transparent",
-      plot_bgcolor = "transparent",
-      font = list(color = "#8899aa"),
-      legend = list(font = list(color = "#ccc")),
-      showlegend = TRUE
-    )
   })
 
   # ═══════════════════════════════════════════════════════════════════════════════
@@ -436,7 +497,7 @@ function(input, output, session) {
     )
 
     for (name in names(METRICS)) {
-      period <- max(1L, floor(time$minute / 10L))
+      period <- min(144L, floor(time$minute / 10L) + 1L)
       query <- sprintf(
         "SELECT lower, mean, upper FROM model_results WHERE metric_name = '%s' AND period = %d", name, period
       )
@@ -521,13 +582,17 @@ function(input, output, session) {
     dt <- db$dt
 
     # Compute rolling statistics (window of 60 minutes)
-    dt$rolling_mean <- stats::filter(dt$value, rep(1/60, 60), sides = 1)
-    dt$rolling_sd <- sqrt(stats::filter((dt$value - dt$rolling_mean)^2, rep(1/60, 60), sides = 1))
+    # as.numeric() required: stats::filter returns a ts object which breaks pmax/xtable
+    dt$rolling_mean <- as.numeric(stats::filter(dt$value, rep(1/60, 60), sides = 1))
+    dt$rolling_sd   <- as.numeric(sqrt(abs(as.numeric(stats::filter(
+      (dt$value - ifelse(is.na(dt$rolling_mean), mean(dt$value, na.rm=TRUE), dt$rolling_mean))^2,
+      rep(1/60, 60), sides = 1)))))
     dt$rolling_mean[is.na(dt$rolling_mean)] <- mean(dt$value, na.rm = TRUE)
-    dt$rolling_sd[is.na(dt$rolling_sd)] <- sd(dt$value, na.rm = TRUE)
+    dt$rolling_sd[is.na(dt$rolling_sd)]     <- sd(dt$value, na.rm = TRUE)
+    dt$rolling_sd[dt$rolling_sd < 1e-6]     <- sd(dt$value, na.rm = TRUE)
 
     # Detect anomalies: points beyond sigma standard deviations
-    dt$z_score <- abs(dt$value - dt$rolling_mean) / pmax(dt$rolling_sd, 0.001)
+    dt$z_score <- as.numeric(abs(dt$value - dt$rolling_mean)) / pmax(as.numeric(dt$rolling_sd), 0.001)
     dt$is_anomaly <- dt$z_score > sigma
 
     anomalies <- dt[dt$is_anomaly, ]
@@ -560,14 +625,14 @@ function(input, output, session) {
       legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.15, font = list(color = "#ccc"))
     )
 
-    # Top anomalies table
+    # Top anomalies table (all columns must be plain atomic types for xtable)
     tbl <- if (n_anomalies > 0L) {
-      top <- head(anomalies[order(-anomalies$z_score), ], 20)
+      top <- head(anomalies[order(-as.numeric(anomalies$z_score)), ], 20)
       data.frame(
-        Time = top$date,
-        Value = round(top$value, 2),
-        Expected = round(top$rolling_mean, 2),
-        Severity = round(top$z_score, 2),
+        Time     = as.character(top$date),
+        Value    = as.numeric(round(top$value, 2)),
+        Expected = as.numeric(round(top$rolling_mean, 2)),
+        Sigma    = as.numeric(round(top$z_score, 2)),
         stringsAsFactors = FALSE
       )
     } else {

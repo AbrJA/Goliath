@@ -12,6 +12,8 @@ RUN installr -d \
 
 ENV DB_PATH=/app/data/metrics.db
 ENV TZDIR=/usr/share/zoneinfo
+# Override at runtime: docker run -e TZ=America/Chicago ...
+ENV TZ=UTC
 
 WORKDIR /app
 
