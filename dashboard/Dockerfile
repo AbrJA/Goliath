@@ -1,27 +1,33 @@
-FROM rocker/shiny:4.4.0
+# Build from project root:
+#   docker build -f dashboard/Dockerfile -t goliath-dashboard .
+FROM ghcr.io/r-hub/r-minimal/r-minimal:4.6.0
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsqlite3-dev \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+# -d  : install C/C++ compilers, remove after packages are built
+# -t  : Alpine packages needed at build time only (removed after)
+# -a  : Alpine packages kept at runtime
+# zlib-dev is required by httpuv (shiny dependency)
+RUN installr -d \
+      -t "gfortran curl-dev openssl-dev zlib-dev" \
+      -a "libcurl openssl zlib tzdata" \
+      R6 checkmate data.table DBI RSQLite pool forecast \
+      shiny plotly bslib httr yyjsonr
 
-RUN R -e "install.packages(c('R6', 'data.table', 'checkmate', 'DBI', 'RSQLite', 'pool', 'forecast', 'plotly', 'bslib', 'httr', 'yyjsonr'), repos = 'https://cloud.r-project.org')"
+ENV DB_PATH=/app/data/metrics.db
+ENV TZDIR=/usr/share/zoneinfo
 
 WORKDIR /app
 
-ENV DB_PATH=/app/data/metrics.db
-ENV HOME=/app
+COPY core ./core
+RUN R CMD INSTALL core --no-docs --no-test-load && rm -rf core
 
-COPY ../core ./core
-RUN R -e "install.packages('./core', repos = NULL, type = 'source')"
+COPY dashboard/constants ./constants
+COPY dashboard/functions ./functions
+COPY dashboard/global.R  .
+COPY dashboard/server.R  .
+COPY dashboard/ui.R      .
 
-COPY constants ./constants
-COPY functions ./functions
-COPY global.R .
-COPY server.R .
-COPY ui.R .
+# COPY data ./data
 
 EXPOSE 8000
 
-CMD ["R", "-e", "shiny::runApp('/app', host = '0.0.0.0', port = 8000)"]
+CMD ["R", "--slave", "-e", "shiny::runApp('/app', host='0.0.0.0', port=8000)"]
