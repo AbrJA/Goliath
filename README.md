@@ -16,25 +16,25 @@ This framework provides **end-to-end monitoring** for industrial processes by:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        Architecture                                  │
+│                        Architecture                                 │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│   ┌──────────┐     ┌──────────┐     ┌──────────────────────────┐   │
-│   │  Sensors │────▶│  SQLite  │────▶│  Backend Process Engine  │   │
-│   │  (Data)  │     │    DB    │     │  • Metric aggregation    │   │
-│   └──────────┘     └────┬─────┘     │  • Model training        │   │
-│                          │           │  • Anomaly validation    │   │
-│                          │           └──────────────────────────┘   │
-│                          │                                           │
-│                          ▼                                           │
-│                    ┌───────────────────────────────────┐             │
-│                    │      Shiny Dashboard              │             │
-│                    │  • Real-time overview (6 panels)  │             │
-│                    │  • Detailed zoom view             │             │
-│                    │  • Historical analysis            │             │
-│                    │  • Alert status                   │             │
-│                    └───────────────────────────────────┘             │
-│                                                                      │
+│                                                                     │
+│   ┌──────────┐      ┌──────────┐      ┌──────────────────────────┐  │
+│   │  Sensors │────▶│  SQLite  │────▶│  Backend Process Engine  │  │
+│   │  (Data)  │      │    DB    │      │  • Metric aggregation    │  │
+│   └──────────┘      └────┬─────┘      │  • Model training        │  │
+│                          │            │  • Anomaly validation    │  │
+│                          │            └──────────────────────────┘  │
+│                          │                                          │
+│                          ▼                                          │
+│                    ┌───────────────────────────────────┐            │
+│                    │      Shiny Dashboard              │            │
+│                    │  • Real-time overview (6 panels)  │            │
+│                    │  • Detailed zoom view             │            │
+│                    │  • Historical analysis            │            │
+│                    │  • Alert status                   │            │
+│                    └───────────────────────────────────┘            │
+│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

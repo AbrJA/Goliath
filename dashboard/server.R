@@ -320,8 +320,8 @@ function(input, output, session) {
         plot_lines(time$serie, model$prediction$mean, n, "predicted", color, c(2L, 2L)) %>%
         plot_layout(model$prediction$mean, n, paste0(name, " \U2014 Model Preview (K=", k, ", ", level, "% CI)"))
 
-      fitted <- model$model
-      r_sq <- if (!is.null(fitted)) summary(fitted)$r.squared else NA_real_
+      lm_fit <- model$model
+      r_sq <- if (!is.null(lm_fit)) tryCatch(summary.lm(lm_fit)$r.squared, error = function(e) NA_real_) else NA_real_
       list(plot = p, model = model, r_squared = r_sq,
            k = k, level = level, periods = n)
     } else {
